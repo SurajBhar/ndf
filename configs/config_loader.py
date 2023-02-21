@@ -36,10 +36,10 @@ def config_parser():
     parser.add_argument("--input_res", type=int, default=256,
                         help='Training and testing shapes are normalized to be in a common bounding box.\
                              This value defines the max value in x,y and z for the bounding box.')
-    parser.add_argument("--num_points", type=int, default=10000,
+    parser.add_argument("--num_points", type=int, default=3000,
                         help='Number of points sampled from each ground truth shape.')
 
-    # Preprocessing - Multiprocessing
+    # Preprocessing - Multiprocessing default num_chunks =1, num_cpus = -1
     parser.add_argument("--num_chunks", type=int, default=1,
                         help='The preprocessing can be distributed over num_chunks multiple machines.\
                          For this the raw files are split into num_chunks chunks. \
@@ -71,17 +71,17 @@ def config_parser():
                               help='Relative size of test set.')
 
     # Generation
-    parser.add_argument("--num_sample_points_generation", type=int, default=50000,
+    parser.add_argument("--num_sample_points_generation", type=int, default=6000,
                         help='Number of point samples per object provided to the NDF network during generation.\
                             Influences generation speed (larger batches result in faster generation) but also GPU \
                              memory usage (higher values need more memory). Tip: choose largest possible value on GPU.')
 
-    # Training
-    parser.add_argument("--num_sample_points_training", type=int, default=50000,
+    # Training default=50000
+    parser.add_argument("--num_sample_points_training", type=int, default=6000,
                         help='Number of point samples per object provided to the NDF network during training.\
                             Influences training speed (larger batches result in shorter epochs) but also GPU \
                              memory usage (higher values need more memory). Needs to be balanced with batch_size.')
-    parser.add_argument("--batch_size", type=int, default=4,
+    parser.add_argument("--batch_size", type=int, default=1,
                         help='Number of objects provided to the NDF network in one batch during training.\
                             Influences training speed (larger batches result in shorter epochs) but also GPU \
                              memory usage (higher values need more memory). Needs to be balanced with \

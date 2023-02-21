@@ -53,10 +53,12 @@ class Trainer(object):
 
 
 
-        df_pred = self.model(p,inputs) #(Batch,num_points)
+        df_pred, min_encoding_indices, loss_d = self.model(p,inputs) #(Batch,num_points)
 
         loss_i = torch.nn.L1Loss(reduction='none')(torch.clamp(df_pred, max=self.max_dist),torch.clamp(df_gt, max=self.max_dist))# out = (B,num_points) by componentwise comparing vecots of size num_samples:
         loss = loss_i.sum(-1).mean() # loss_i summed over all #num_samples samples -> out = (B,1) and mean over batch -> out = (1)
+        # Add here new loss
+        loss = loss + loss_d
 
         return loss
 

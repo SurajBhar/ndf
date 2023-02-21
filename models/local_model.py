@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+#import ipdb; ipdb.set_trace()
 # 1D conv usage:
 # batch_size (N) = #3D objects , channels = features, signal_lengt (L) (convolution dimension) = #point samples
 # kernel_size = 1 i.e. every convolution over only all features of one point sample
@@ -55,6 +55,13 @@ class NDF(nn.Module):
                 displacments.append(input)
 
         self.displacments = torch.Tensor(displacments).cuda()
+        self.latent_dim = 1741
+        #self.displacments = torch.Tensor(displacments).cuda()
+        self.num_codebook_vectors = 2048*3
+        self.beta = 1
+        self.embedding_1 = nn.Embedding(self.num_codebook_vectors, self.latent_dim).cuda()
+        self.embedding_1.weight.data.uniform_(0, 1).cuda()
+
 
     def encoder(self,x):
         x = x.unsqueeze(1)
@@ -96,31 +103,56 @@ class NDF(nn.Module):
 
         return f_0, f_1, f_2, f_3, f_4, f_5, f_6
 
-    def decoder(self, p, f_0, f_1, f_2, f_3, f_4, f_5, f_6):
+    def embedding(self, p, f_0, f_1, f_2, f_3, f_4, f_5, f_6):
+        # pe_embd = self.harmonic_embedding(p).transpose(1, -1)
 
         p_features = p.transpose(1, -1)
+
         p = p.unsqueeze(1).unsqueeze(1)
         p = torch.cat([p + d for d in self.displacments], dim=2)
 
         # feature extraction
-        feature_0 = F.grid_sample(f_0, p, padding_mode='border')
-        feature_1 = F.grid_sample(f_1, p, padding_mode='border')
-        feature_2 = F.grid_sample(f_2, p, padding_mode='border')
-        feature_3 = F.grid_sample(f_3, p, padding_mode='border')
-        feature_4 = F.grid_sample(f_4, p, padding_mode='border')
-        feature_5 = F.grid_sample(f_5, p, padding_mode='border')
-        feature_6 = F.grid_sample(f_6, p, padding_mode='border')
+        feature_0 = F.grid_sample(f_0, p, align_corners=True)
+        feature_1 = F.grid_sample(f_1.float(), p, align_corners=True)
+        feature_2 = F.grid_sample(f_2.float(), p, align_corners=True)
+        feature_3 = F.grid_sample(f_3.float(), p, align_corners=True)
+        feature_4 = F.grid_sample(f_4.float(), p, align_corners=True)
+        feature_5 = F.grid_sample(f_5.float(), p, align_corners=True)
+        feature_6 = F.grid_sample(f_6.float(), p, align_corners=True)
 
         # here every channel corresponds to one feature.
 
-        features = torch.cat((feature_0, feature_1, feature_2, feature_3, feature_4, feature_5, feature_6),
-                             dim=1)  # (B, features, 1,7,sample_num)
+        features = torch.cat(
+            (feature_0, feature_1, feature_2, feature_3, feature_4, feature_5, feature_6), dim=1
+        )  # (B, features, 1,7,sample_num)
         shape = features.shape
-        features = torch.reshape(features,
-                                 (shape[0], shape[1] * shape[3], shape[4]))  # (B, featues_per_sample, samples_num)
+        #print(f" The shape of features is {shape}")
+        features = torch.reshape(
+            features, (shape[0], shape[1] * shape[3], shape[4])
+        )  # (B, featues_per_sample, samples_num)
+        # features = torch.cat((features, p_features, pe_embd), dim=1)  # (B, featue_size, samples_num)
         features = torch.cat((features, p_features), dim=1)  # (B, featue_size, samples_num)
+        
+        z = features
+        #print(f"The shape of z is: {z.shape}")
+        z_flattened = z.contiguous().view(-1, self.latent_dim)
 
-        net = self.actvn(self.fc_0(features))
+        #print(f"The shape of flattened z_flattened is : {z_flattened.shape}")
+        #print(self.embedding_1)
+        d = torch.sum(z_flattened ** 2, dim=1, keepdim=True)+ \
+            torch.sum(self.embedding_1.weight ** 2, dim=1) - \
+            2 * (torch.matmul(z_flattened,self.embedding_1.weight.t()))
+        min_encoding_indices = torch.argmin(d, dim=1)
+        z_q = self.embedding_1(min_encoding_indices).view(z.shape)
+        loss = torch.mean((z_q.detach() - z) **2) + self.beta * torch.mean((z_q - z.detach()) ** 2)
+        z_q = z + (z_q -z).detach()
+        
+        return z_q, min_encoding_indices, loss
+
+
+    def decoder(self, p, z_q):
+
+        net = self.actvn(self.fc_0(z_q))
         net = self.actvn(self.fc_1(net))
         net = self.actvn(self.fc_2(net))
         net = self.actvn(self.fc_out(net))
@@ -129,5 +161,18 @@ class NDF(nn.Module):
         return  out
 
     def forward(self, p, x):
-        out = self.decoder(p, *self.encoder(x))
-        return out
+        z_q, min_encoding_indices, loss = self.embedding(p, *self.encoder(x))
+        out = self.decoder(p, z_q)
+        return out, min_encoding_indices, loss
+
+
+
+#T = torch.rand(3,256,256,256).cuda()
+#p = torch.rand(3,3000,3).cuda()
+#N = NDF().cuda()
+#e_1,e_2, e_3, e_4, e_5, e_6, e_7 = N.encoder(T)
+#print(e_1,e_2, e_3, e_4, e_5, e_6, e_7)
+#z_q, min_encoding_indices, loss = N.embedding(p, e_1,e_2, e_3, e_4, e_5, e_6, e_7)
+#print(z_q)
+#out = N.decoder(p, z_q)
+#print(out)

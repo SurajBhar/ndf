@@ -125,20 +125,25 @@ class NDF(nn.Module):
         features = torch.cat(
             (feature_0, feature_1, feature_2, feature_3, feature_4, feature_5, feature_6), dim=1
         )  # (B, features, 1,7,sample_num)
+        
         shape = features.shape
         #print(f" The shape of features is {shape}")
+        
         features = torch.reshape(
             features, (shape[0], shape[1] * shape[3], shape[4])
         )  # (B, featues_per_sample, samples_num)
         # features = torch.cat((features, p_features, pe_embd), dim=1)  # (B, featue_size, samples_num)
+        
         features = torch.cat((features, p_features), dim=1)  # (B, featue_size, samples_num)
         
         z = features
         #print(f"The shape of z is: {z.shape}")
+
         z_flattened = z.contiguous().view(-1, self.latent_dim)
 
         #print(f"The shape of flattened z_flattened is : {z_flattened.shape}")
         #print(self.embedding_1)
+
         d = torch.sum(z_flattened ** 2, dim=1, keepdim=True)+ \
             torch.sum(self.embedding_1.weight ** 2, dim=1) - \
             2 * (torch.matmul(z_flattened,self.embedding_1.weight.t()))
@@ -146,6 +151,8 @@ class NDF(nn.Module):
         z_q = self.embedding_1(min_encoding_indices).view(z.shape)
         loss = torch.mean((z_q.detach() - z) **2) + self.beta * torch.mean((z_q - z.detach()) ** 2)
         z_q = z + (z_q -z).detach()
+
+        #print(f"The Shape of z_q is : {z_q.shape}")
         
         return z_q, min_encoding_indices, loss
 
@@ -167,12 +174,8 @@ class NDF(nn.Module):
 
 
 
-#T = torch.rand(3,256,256,256).cuda()
-#p = torch.rand(3,3000,3).cuda()
-#N = NDF().cuda()
-#e_1,e_2, e_3, e_4, e_5, e_6, e_7 = N.encoder(T)
-#print(e_1,e_2, e_3, e_4, e_5, e_6, e_7)
-#z_q, min_encoding_indices, loss = N.embedding(p, e_1,e_2, e_3, e_4, e_5, e_6, e_7)
-#print(z_q)
-#out = N.decoder(p, z_q)
-#print(out)
+#T = torch.rand(3,256,256,256) #.cuda()
+#p = torch.rand(3,6000,3) #.cuda()
+#N = NDF() #.cuda()
+#out = N.forward(p,T)
+

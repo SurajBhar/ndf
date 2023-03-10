@@ -24,7 +24,7 @@ class Generator(object):
         for param in self.model.parameters():
             param.requires_grad = False
 
-        sample_num = 200000
+        sample_num = 10000
         samples_cpu = np.zeros((0, 3))
         samples = torch.rand(1, sample_num, 3).float().to(self.device) * 3 - 1.5
         samples.requires_grad = True
@@ -37,7 +37,8 @@ class Generator(object):
 
             for j in range(num_steps):
                 print('refinement', j)
-                df_pred = torch.clamp(self.model.decoder(samples, *encoding), max=self.threshold)
+                embedding, idx, loss_emb = self.model.embedding(samples, *encoding)
+                df_pred = torch.clamp(self.model.decoder(samples, embedding), max=self.threshold)
 
                 df_pred.sum().backward()
 
